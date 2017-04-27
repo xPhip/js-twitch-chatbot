@@ -1,0 +1,111 @@
+<!doctype html>
+<html>
+<head>
+<title>Twitch IRC Chat | WebSocket</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font: 13px Helvetica, Arial; }
+#chat { background: #000; padding: 3px; position: fixed; bottom: 0; width: 100%; }
+#chat input { border: 0; padding: 10px; width: 90%; margin-right: .5%; }
+#chat #btn { width: 9%; background: rgb(130, 224, 255); border: none; padding: 10px; }
+#messages { list-style-type: none; margin: 0; padding: 0; }
+#messages li { padding: 5px 10px; }
+#messages li:nth-child(odd) { background: #eee; }
+</style>
+</head>
+<body>
+
+<ul id="messages"></ul>
+<div id="chat">
+	<input id="input" placeholder="Enter text here..." autocomplete="off" disabled="disabled">
+	<button id="btn" disabled="disabled">Enviar</button>
+</div>
+
+<script src="jquery-3.2.1.min.js"></script>
+<script>
+
+$(document).ready(function(){
+
+	// Configs
+	var bot = {
+		host: 'irc-ws.chat.twitch.tv',
+		pass: 'oauth:TOKEN-HERE',
+		nick: 'NICK-HERE',
+		channel: 'CHANNEL-HERE',
+		socket: null,
+		connect: function(e) {
+			var connection = new WebSocket('wss://'+bot.host);
+			connection.onopen = function(e){
+				bot.auth(e);
+			};
+			connection.onmessage = function(e){
+				bot.listen(e);
+			};
+			connection.onerror = function(e){
+				bot.error(e);
+			};
+			this.socket = connection;
+			this.pingLoop();
+		},
+		auth: function(e) {
+			$('#input').prop('disabled', false);
+			$('#btn').prop('disabled', false);
+			this.socket.send('PASS ' + this.pass);
+			this.socket.send('NICK ' + this.nick);
+			this.join(bot.channel);
+		},
+		listen: function(e) {
+			if (e.data.lastIndexOf('PING', 0) === 0) {
+				this.pingResponse();
+				return false;
+			}
+			this.put(e.data);
+		},
+		send: function(string) {
+			this.socket.send('PRIVMSG #'+this.channel+' :' + string);
+		},
+		error: function(e) {
+			$('#messages').append($('<li>').text(e.msg));
+			console.log(e);
+		},
+		pingResponse: function(e) {
+			this.socket.send('PONG :tmi.twitch.tv');
+			console.log('PONG Sent\r\n');
+		},
+		pingLoop: function(e) {
+			setInterval(function(){
+				this.socket.send('PONG :tmi.twitch.tv');
+				console.log('PONG Sent\r\n');
+			}, 120000);
+		},
+		join: function(channel) {
+			this.socket.send('JOIN #' + channel);
+		},
+		put: function(msg) {
+			$('#messages').append($('<li>').text(bot.nick+': '+msg));
+		}
+	};
+
+	$('#btn').on('click', function(){
+		if ( $('#input').val().lenght != 0 ) {
+			bot.send( $('#input').val() );
+			$('#input').val('');
+			return false;
+		}
+	});
+
+	$('#input').keydown(function(e){
+		if(e.keyCode == 13) {
+			bot.send( $('#input').val() );
+			bot.put( $('#input').val() );
+			$('#input').val('');
+		}
+	});
+
+	bot.connect();
+
+});
+
+</script>
+</body>
+</html>
